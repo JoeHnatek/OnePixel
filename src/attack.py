@@ -27,18 +27,27 @@ import argparse
 import copy
 import os
 import numpy as np
+import socket
 import torch
 import torch.nn as nn
-import torchvision
 import torchvision.transforms as transforms
 import random
+from datetime import datetime
 from networks import allCNN
 from networks import NiN
+from networks import vgg
 from Perturbation import Perturbation
 from torchvision.models import vgg16
 from PIL import Image as img
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-torch.manual_seed(0)
+
+SEED = 0
+torch.manual_seed(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+torch.cuda.manual_seed_all(SEED)
 
 
 def dir_path(string):
@@ -64,6 +73,7 @@ parser.add_argument('-data', type=dir_path, default='../cifar-10-kaggle/test')
 parser.add_argument('-model', type=network)
 parser.add_argument('-n', type=int, default=1)
 parser.add_argument('-i', nargs="+", type=int)
+parser.add_argument('-t', type=str, default=datetime.now().strftime("%Y%m%dT%H%M%S"))
 args = parser.parse_args()
 
 args = vars(parser.parse_args())
@@ -74,7 +84,6 @@ for key in args:
 
 if len(args['i']) == 1 and args['i'][0] == -1:
     RAND = True
-    print("RANDOM MODE ON")
 else:
     RAND = False
     assert len(
@@ -84,13 +93,7 @@ else:
             parser.error(
                 "Random mode is off - An index given in the -i flag is negative, please remove value: {}".format(i))
 
-
-def sortDirectory(aList):
-    result = []
-    for i in aList:
-        result.append(int(i.split(".")[0]))  # Split on '.png'
-
-    return sorted(result)
+START_TIMESTAMP = args['t']
 
 
 def createSingleBatch(aImage):
@@ -124,9 +127,9 @@ def classify(batch, target=None):
 
 def createCandidateSol():
     # Create the rgb and xy values
-    r = int(numpy.random.default_rng().normal(128, 127)) % 256
-    g = int(numpy.random.default_rng().normal(128, 127)) % 256
-    b = int(numpy.random.default_rng().normal(128, 127)) % 256
+    r = int(np.random.default_rng().normal(128, 127)) % 256
+    g = int(np.random.default_rng().normal(128, 127)) % 256
+    b = int(np.random.default_rng().normal(128, 127)) % 256
 
     x = random.randint(0, 32-1)
     y = random.randint(0, 32-1)
@@ -136,13 +139,31 @@ def createCandidateSol():
 
 def createChildSol(possiblePerturbations, f=0.5):
 
-    x1, x2, x3 = numpy.random.choice(possiblePerturbations, 3)
+    x1, x2, x3 = np.random.choice(possiblePerturbations, 3)
 
     x = int(x1.getX + f * (x2.getX - x3.getX)) % 32
     y = int(x1.getY + f * (x2.getY - x3.getY)) % 32
     r = int(x1.getR + f * (x2.getR - x3.getR)) % 256
     g = int(x1.getG + f * (x2.getG - x3.getG)) % 256
     b = int(x1.getB + f * (x2.getB - x3.getB)) % 256
+
+    return Perturbation(x, y, r, g, b)
+
+def getF():
+
+    return float(np.random.default_rng().normal(0.5, 0.3)) % 2
+
+def createBestTwoSol(possiblePerturbations, best):
+
+    x1, x2, x3, x4 = np.random.choice(possiblePerturbations, 4)
+
+    f = getF()
+
+    x = int(best.getX + f * (x1.getX - x2.getX) + f * (x3.getX - x4.getX)) % 32
+    y = int(best.getY + f * (x1.getY - x2.getY) + f * (x3.getY - x4.getY)) % 32
+    r = int(best.getR + f * (x1.getR - x2.getR) + f * (x3.getR - x4.getR)) % 256
+    g = int(best.getG + f * (x1.getG - x2.getG) + f * (x3.getG - x4.getG)) % 256
+    b = int(best.getB + f * (x1.getB - x2.getB) + f * (x3.getB - x4.getB)) % 256
 
     return Perturbation(x, y, r, g, b)
 
@@ -194,7 +215,7 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
         for i in range(population):
 
             possiblePerturbations = listCS[i:]+listCS[:i-1]
-            childPerturbation = createChildSol(possiblePerturbations)
+            childPerturbation = createChildSol(possiblePerturbations)#, highest)
 
             image2 = createImage(srcImage, childPerturbation)
 
@@ -207,17 +228,17 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
             childPerturbation.targetConfidence = con
             childPerturbation.classification = top[0]
             childPerturbation.classificationConfidence = top[1]
-
+            
             childPerturbation.image = image2
-
-            parentPerturbation = listCS[i]
+            d[childPerturbation.getX][childPerturbation.getY] += 1
+            parentPerturbation = copy.deepcopy(listCS[i])
 
             if (childPerturbation.targetConfidence >= 90):
                 stop = True
                 highest = copy.deepcopy(childPerturbation)
 
             if childPerturbation.targetConfidence > parentPerturbation.targetConfidence:
-                listCS[i] = childPerturbation
+                listCS[i] = copy.deepcopy(childPerturbation)
 
             if (childPerturbation.targetConfidence > highest.targetConfidence):
                 highest = copy.deepcopy(childPerturbation)
@@ -244,8 +265,10 @@ def main():
             if target == oClass:
                 continue
             highest = attackDE(srcImage, target, image)
+            
+            dir_path(RESULTS_PATH)
 
-            with open('results1.txt', 'a') as f:
+            with open(RESULTS_PATH+"{}.txt".format(HOST), 'a') as f:
                 f.write("{} {} {:.4f} {} {:.4f} {} {:.4f} {}\n".format(image, oClass, oConf, target, highest.targetConfidence,
                         highest.classification, highest.classificationConfidence, (highest.getCoords, highest.getRGB)))
             del highest
@@ -254,25 +277,30 @@ def main():
 
 if __name__ == '__main__':
 
-    if args['model'] == 'allcnn':
+    MODEL = args['model']
+    HOST = socket.gethostname()
+    
+    if MODEL == 'allcnn':
         net = allCNN.Net()
-        PATH = '../models/cifar10-allCNN-20210801T132829.pth'
-    elif args['model'] == 'nin':
+        MODEL_PATH = '../models/cifar10-allCNN-20210801T132829.pth'
+    elif MODEL == 'nin':
         net = NiN.Net()
-        PATH = '../models/cifar10-NiN-20210315T190616.pth'
-    elif args['model'] == 'vgg':
+        MODEL_PATH = '../models/cifar10-NiN-20210315T190616.pth'
+    elif MODEL == 'vgg':
         net = vgg16()
-        PATH = '../models/cifar10-VGG16-20210315T233328.pth'
+        MODEL_PATH = '../models/cifar10-VGG16-20210315T233328.pth'
+    elif MODEL == 'fer':
+        net = vgg.Vgg()
+        MODEL_PATH = '../models/VGGNet'
 
     if torch.cuda.is_available():
         DEVICE = torch.device("cuda")
-        torch.cuda.manual_seed_all(0)
     else:
         raise Exception("Need CUDA to run this program.")
 
     net = nn.DataParallel(net)
     net.to(DEVICE)
-    net.load_state_dict(torch.load(PATH), strict=False)
+    net.load_state_dict(torch.load(MODEL_PATH), strict=False)
 
     TRANSFORM = transforms.Compose([transforms.ToTensor()])
 
@@ -287,4 +315,23 @@ if __name__ == '__main__':
 
     PATH = args['data']
 
+    d = np.zeros((32,32))
+
+    RESULTS_PATH = '../results/{}/'.format(START_TIMESTAMP)
+
+    try:
+        os.mkdir(os.path.dirname(RESULTS_PATH))
+    except:
+        raise NotADirectoryError
+    
+    with open(RESULTS_PATH+"{}.txt".format(HOST), 'a') as f:
+        f.write("MODEL: {}\n".format(MODEL))
+        f.write("MODEL_PATH: {}\n".format(MODEL_PATH))
+        f.write("HOST: {}\n".format(HOST))
+        f.write("SEED: {}\n".format(SEED))
+        for i in IMAGES:
+            f.write("IMAGE: {}.png\n".format(i))
+    print("now")
     main()
+    ax = sns.heatmap(d, robust=True, cmap='rainbow')
+    plt.savefig("test3.png")
