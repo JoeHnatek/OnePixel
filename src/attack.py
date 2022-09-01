@@ -36,7 +36,8 @@ from datetime import datetime
 from networks import allCNN
 from networks import NiN
 from networks import vgg
-from Perturbation import Perturbation
+import Perturbation
+import PerturbationGrayScale
 from torchvision.models import vgg16
 from PIL import Image as img
 import matplotlib.pyplot as plt
@@ -64,13 +65,22 @@ def network(string):
         return string
     else:
         parser.error(
-            "Value: {}, is not a valid network to attack\nValid networks: allcnn, nin, vgg".format(string))
+            f"Value: {string}, is not a valid network to attack\nValid networks: allcnn, nin, vgg")
 
+def mode(string):
+    modes = ["RGB", "gray"]
+
+    if string in modes:
+        return string
+    else:
+        parser.error(
+            f"Value: {string}, is not a valid mode to attack\nValid modes: RGB, gray")
 
 parser = argparse.ArgumentParser(
     description="Perform one-pixel attacks on images")
 parser.add_argument('-data', type=dir_path, default='../cifar-10-kaggle/test')
 parser.add_argument('-model', type=network)
+parser.add_argument('-mode', type=mode)
 parser.add_argument('-n', type=int, default=1)
 parser.add_argument('-i', nargs="+", type=int)
 parser.add_argument('-t', type=str, default=datetime.now().strftime("%Y%m%dT%H%M%S"))
@@ -126,28 +136,24 @@ def classify(batch, target=None):
 
 
 def createCandidateSol():
-    # Create the rgb and xy values
-    r = int(np.random.default_rng().normal(128, 127)) % 256
-    g = int(np.random.default_rng().normal(128, 127)) % 256
-    b = int(np.random.default_rng().normal(128, 127)) % 256
-
-    x = random.randint(0, 32-1)
-    y = random.randint(0, 32-1)
-
-    return Perturbation(x, y, r, g, b)
-
+    
+    if MODE == 'RGB':
+        return Perturbation.createCandidateSol()
+    elif MODE == 'gray':
+        return PerturbationGrayScale.createCandidateSol()
+    else:
+        exit() # crash
 
 def createChildSol(possiblePerturbations, f=0.5):
 
     x1, x2, x3 = np.random.choice(possiblePerturbations, 3)
 
-    x = int(x1.getX + f * (x2.getX - x3.getX)) % 32
-    y = int(x1.getY + f * (x2.getY - x3.getY)) % 32
-    r = int(x1.getR + f * (x2.getR - x3.getR)) % 256
-    g = int(x1.getG + f * (x2.getG - x3.getG)) % 256
-    b = int(x1.getB + f * (x2.getB - x3.getB)) % 256
-
-    return Perturbation(x, y, r, g, b)
+    if MODE == 'RGB':
+        return Perturbation.createChildSol(x1, x2, x3, f)
+    elif MODE == 'gray':
+        return PerturbationGrayScale.createChildSol(x1, x2, x3, f)
+    else:
+        exit() # crash
 
 def getF():
 
@@ -159,14 +165,12 @@ def createBestTwoSol(possiblePerturbations, best):
 
     f = getF()
 
-    x = int(best.getX + f * (x1.getX - x2.getX) + f * (x3.getX - x4.getX)) % 32
-    y = int(best.getY + f * (x1.getY - x2.getY) + f * (x3.getY - x4.getY)) % 32
-    r = int(best.getR + f * (x1.getR - x2.getR) + f * (x3.getR - x4.getR)) % 256
-    g = int(best.getG + f * (x1.getG - x2.getG) + f * (x3.getG - x4.getG)) % 256
-    b = int(best.getB + f * (x1.getB - x2.getB) + f * (x3.getB - x4.getB)) % 256
-
-    return Perturbation(x, y, r, g, b)
-
+    if MODE == 'RGB':
+        return Perturbation.createBestTwoSol(x1, x2, x3, x4, f, best)
+    elif MODE == 'gray':
+        return PerturbationGrayScale.createBestTwoSol(x1, x2, x3, x4, f, best)
+    else:
+        exit() # crash
 
 def createImage(image, p):
     image = copy.deepcopy(image)
@@ -278,6 +282,7 @@ def main():
 if __name__ == '__main__':
 
     MODEL = args['model']
+    MODE = args['mode']
     HOST = socket.gethostname()
     
     if MODEL == 'allcnn':
