@@ -28,10 +28,8 @@ import numpy as np
 
 
 SEED = 0
-torch.manual_seed(SEED)
 random.seed(SEED)
 np.random.seed(SEED)
-torch.cuda.manual_seed_all(SEED)
 
 class PerturbationGrayScale:
     def __init__(self, x, y, gray, filename=None, tClass=None, tConf=None, aClass=None, aClassConf=None):
@@ -41,7 +39,7 @@ class PerturbationGrayScale:
         assert (y >= 0 and y <=
                 31), "Value given for y is not between 0 and 31. Given: {}".format(y)
         assert (gray >= 0 and gray <=
-                255), "Value given for gray is not between 0 and 255. Given: {}".format(r)
+                255), "Value given for gray is not between 0 and 255. Given: {}".format(gray)
 
         self.__x = x
         self.__y = y
@@ -146,7 +144,7 @@ def createChildSol(x1, x2, x3, f=0.5):
 
     return PerturbationGrayScale(x, y, gray)
 
-def createBestTwoSol(x1, x2, x3, f, best):
+def createBestTwoSol(x1, x2, x3, x4, f, best):
 
     x = int(best.getX + f * (x1.getX - x2.getX) + f * (x3.getX - x4.getX)) % 32
     y = int(best.getY + f * (x1.getY - x2.getY) + f * (x3.getY - x4.getY)) % 32

@@ -27,10 +27,8 @@ import random
 import numpy as np
 
 SEED = 0
-torch.manual_seed(SEED)
 random.seed(SEED)
 np.random.seed(SEED)
-torch.cuda.manual_seed_all(SEED)
 
 class Perturbation:
     def __init__(self, x, y, r, g, b, filename=None, tClass=None, tConf=None, aClass=None, aClassConf=None):
