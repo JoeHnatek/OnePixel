@@ -26,37 +26,31 @@ import copy
 import random
 import numpy as np
 
+
 SEED = 0
 torch.manual_seed(SEED)
 random.seed(SEED)
 np.random.seed(SEED)
 torch.cuda.manual_seed_all(SEED)
 
-class Perturbation:
-    def __init__(self, x, y, r, g, b, filename=None, tClass=None, tConf=None, aClass=None, aClassConf=None):
+class PerturbationGrayScale:
+    def __init__(self, x, y, gray, filename=None, tClass=None, tConf=None, aClass=None, aClassConf=None):
 
         assert (x >= 0 and x <=
                 31), "Value given for x is not between 0 and 31. Given: {}".format(x)
         assert (y >= 0 and y <=
                 31), "Value given for y is not between 0 and 31. Given: {}".format(y)
-        assert (r >= 0 and r <=
-                255), "Value given for r is not between 0 and 255. Given: {}".format(r)
-        assert (g >= 0 and g <=
-                255), "Value given for g is not between 0 and 255. Given: {}".format(g)
-        assert (b >= 0 and b <=
-                255), "Value given for b is not between 0 and 255. Given: {}".format(b)
+        assert (gray >= 0 and gray <=
+                255), "Value given for gray is not between 0 and 255. Given: {}".format(r)
 
         self.__x = x
         self.__y = y
-        self.__r = r
-        self.__g = g
-        self.__b = b
+        self.__gray = gray
         self.__filename = filename
         self.__tClassification = tClass
         self.__tConfidence = tConf
         self.__classification = aClass
         self.__classificationConfidence = aClassConf
-        self.__grayscale_cam = None
         self.__image = None
 
     @property
@@ -68,24 +62,12 @@ class Perturbation:
         return self.__y
 
     @property
-    def getR(self):
-        return self.__r
-
-    @property
-    def getG(self):
-        return self.__g
-
-    @property
-    def getB(self):
-        return self.__b
+    def getGray(self):
+        return self.__gray
 
     @property
     def getCoords(self):
         return (self.__x, self.__y)
-
-    @property
-    def getRGB(self):
-        return (self.__r, self.__g, self.__b)
 
     @property
     def filename(self):
@@ -144,37 +126,30 @@ class Perturbation:
         self.__image = copy.deepcopy(value)
 
     def __str__(self):
-        return """(x,y)\t: ({}, {})\nRGB\t: ({}, {}, {})
-        \nTarget Class\t: {}\nTarget\t: {}\nClass\t: {}\nClass Confidence\t: {}\n""".format(self.__x, self.__y, self.__r, self.__g, self.__b,
+        return """(x,y)\t: ({}, {})\nGray\t: ({})
+        \nTarget Class\t: {}\nTarget\t: {}\nClass\t: {}\nClass Confidence\t: {}\n""".format(self.__x, self.__y, self.__gray,
                                                                                             self.__tClassification, self.__tConfidence, self.__classification, self.__classificationConfidence)
-
 def createCandidateSol():
-    # Create the rgb and xy values
-    r = int(np.random.default_rng().normal(128, 127)) % 256
-    g = int(np.random.default_rng().normal(128, 127)) % 256
-    b = int(np.random.default_rng().normal(128, 127)) % 256
+    # Create the gray and xy values
+    gray = int(np.random.default_rng().normal(128, 127)) % 256
 
     x = random.randint(0, 32-1)
     y = random.randint(0, 32-1)
 
-    return Perturbation(x, y, r, g, b)
+    return PerturbationGrayScale(x, y, gray)
 
-def createChildSol(x1, x2, x3, f):
+def createChildSol(x1, x2, x3, f=0.5):
 
     x = int(x1.getX + f * (x2.getX - x3.getX)) % 32
     y = int(x1.getY + f * (x2.getY - x3.getY)) % 32
-    r = int(x1.getR + f * (x2.getR - x3.getR)) % 256
-    g = int(x1.getG + f * (x2.getG - x3.getG)) % 256
-    b = int(x1.getB + f * (x2.getB - x3.getB)) % 256
+    gray = int(x1.getGray + f * (x2.getGray - x3.getGray)) % 256
 
-    return Perturbation(x, y, r, g, b)
+    return PerturbationGrayScale(x, y, gray)
 
-def createBestTwoSol(x1, x2, x3, x4, f, best):
+def createBestTwoSol(x1, x2, x3, f, best):
 
     x = int(best.getX + f * (x1.getX - x2.getX) + f * (x3.getX - x4.getX)) % 32
     y = int(best.getY + f * (x1.getY - x2.getY) + f * (x3.getY - x4.getY)) % 32
-    r = int(best.getR + f * (x1.getR - x2.getR) + f * (x3.getR - x4.getR)) % 256
-    g = int(best.getG + f * (x1.getG - x2.getG) + f * (x3.getG - x4.getG)) % 256
-    b = int(best.getB + f * (x1.getB - x2.getB) + f * (x3.getB - x4.getB)) % 256
+    gray = int(best.getGray + f * (x1.getGray - x2.getGray) + f * (x3.getGray - x4.getGray)) % 256
 
-    return Perturbation(x, y, r, g, b)
+    return PerturbationGrayScale(x, y, gray)
