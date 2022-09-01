@@ -218,7 +218,7 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
     while a < MAX_ITER and stop == False:
         for i in range(population):
 
-            possiblePerturbations = listCS[i:]+listCS[:i-1]
+            possiblePerturbations = listCS[i+1:]+listCS[:i]
             childPerturbation = createChildSol(possiblePerturbations)#, highest)
 
             image2 = createImage(srcImage, childPerturbation)
