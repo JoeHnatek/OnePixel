@@ -36,13 +36,15 @@ from datetime import datetime
 from networks import allCNN
 from networks import NiN
 from networks import vgg
+from networks import medNets
 import Perturbation
 import PerturbationGrayScale
 from torchvision.models import vgg16
 from PIL import Image as img
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+import medmnist
+from medmnist import INFO, Evaluator
 
 SEED = 0
 torch.manual_seed(SEED)
@@ -59,7 +61,7 @@ def dir_path(string):
 
 
 def network(string):
-    networks = ["allcnn", "nin", "vgg"]
+    networks = ["allcnn", "nin", "vgg", "path", "breast", "pne", "oct", "blood"]
 
     if string in networks:
         return string
@@ -78,13 +80,14 @@ def mode(string):
 
 parser = argparse.ArgumentParser(
     description="Perform one-pixel attacks on images")
-parser.add_argument('-data', type=dir_path, default='../cifar-10-kaggle/test')
+parser.add_argument('-data', type=str, default='cifar')
 parser.add_argument('-model', type=network)
 parser.add_argument('-mode', type=mode)
 parser.add_argument('-n', type=int, default=1)
 parser.add_argument('-i', nargs="+", type=int)
 parser.add_argument('-t', type=str, default=datetime.now().strftime("%Y%m%dT%H%M%S"))
 args = parser.parse_args()
+
 
 args = vars(parser.parse_args())
 for key in args:
@@ -99,15 +102,153 @@ else:
     assert len(
         args['i']) == args['n'], "Number of images to attack is not equal to the number of indexes given"
     for i in args['i']:
-        if i < 1:
+        if i < 0:
             parser.error(
                 "Random mode is off - An index given in the -i flag is negative, please remove value: {}".format(i))
+
+if args['data'] == "cifar":
+    PATH = "../cifar-10-kaggle/test"
+    IMAGES = set(args['i']) if not RAND else random.sample(
+        range(0, 300000 + 1), args['n'])
+    CLASSES = ('plane', 'car', 'bird', 'cat',
+               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+    CLASS_DICT = {'plane': 0, 'car': 1, 'bird': 2, 'cat': 3,
+                  'deer': 4, 'dog': 5, 'frog': 6, 'horse': 7, 'ship': 8, 'truck': 9}
+
+    IMAGE_DIMENSION = 32
+    
+elif args['data'] == "path":
+    DATASET_INFO = INFO["pathmnist"]
+    IMAGES = set(args['i']) if not RAND else random.sample(
+        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
+    CLASSES = (
+            "adipose",
+            "background",
+            "debris",
+            "lymphocytes",
+            "mucus",
+            "smooth_muscle",
+            "normal_colon_mucosa",
+            "cancer-associated_stroma",
+            "colorectal_adenocarcinoma_epithelium")
+
+    CLASS_DICT = {"adipose": 0,
+            "background": 1,
+            "debris": 2,
+            "lymphocytes": 3,
+            "mucus": 4,
+            "smooth_muscle": 5,
+            "normal_colon_mucosa": 6,
+            "cancer-associated_stroma": 7,
+            "colorectal_adenocarcinoma_epithelium": 8}
+    DataClass = getattr(medmnist, "PathMNIST")
+
+    data_transform = transforms.Compose(
+            [transforms.ToTensor(),
+            transforms.Normalize(mean=[.5], std=[.5])])
+    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=False)
+    IMAGE_DIMENSION = 28
+elif args['data'] == 'breast':
+    DATASET_INFO = INFO["breastmnist"]
+    IMAGES = set(args['i']) if not RAND else random.sample(
+        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
+    CLASSES = (
+            "malignant",
+            "normal, benign",
+            )
+
+    CLASS_DICT = {"malignant": 0,
+            "normal, benign": 1}
+    DataClass = getattr(medmnist, "BreastMNIST")
+
+    data_transform = transforms.Compose(
+            [transforms.ToTensor(),
+            transforms.Normalize(mean=[.5], std=[.5])])
+    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
+    IMAGE_DIMENSION = 28
+elif args['data'] == 'pne':
+    DATASET_INFO = INFO["pneumoniamnist"]
+    IMAGES = set(args['i']) if not RAND else random.sample(
+        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
+    CLASSES = (
+            "normal",
+            "pneumonia",
+            )
+
+    CLASS_DICT = {"normal": 0,
+            "pneumonia": 1}
+    DataClass = getattr(medmnist, "PneumoniaMNIST")
+
+    data_transform = transforms.Compose(
+            [transforms.ToTensor(),
+            transforms.Normalize(mean=[.5], std=[.5])])
+    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
+    IMAGE_DIMENSION = 28
+elif args['data'] == 'oct':
+    DATASET_INFO = INFO["octmnist"]
+    IMAGES = set(args['i']) if not RAND else random.sample(
+        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
+    CLASSES = (
+            "choroidal neovascularization",
+            "diabetic macular edema",
+            "drusen",
+            "normal"
+            )
+
+    CLASS_DICT = {"choroidal neovascularization":0,
+            "diabetic macular edema":1,
+            "drusen":2,
+            "normal":3}
+    DataClass = getattr(medmnist, "OCTMNIST")
+
+    data_transform = transforms.Compose(
+            [transforms.ToTensor(),
+            transforms.Normalize(mean=[.5], std=[.5])])
+    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
+    IMAGE_DIMENSION = 28
+elif args['data'] == 'blood':
+    DATASET_INFO = INFO["bloodmnist"]
+    IMAGES = set(args['i']) if not RAND else random.sample(
+        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
+    CLASSES = (
+            "basophil",
+            "eosinophil",
+            "erythroblast",
+            "immature_granulocytes(myelocytes,_metamyelocytes_and_promyelocytes)",
+            "lymphocyte",
+            "monocyte",
+            "neutrophil",
+            "platelet"
+            )
+
+    CLASS_DICT = {"basophil":0,
+            "eosinophil":1,
+            "erythroblast":2,
+            "immature_granulocytes(myelocytes,_metamyelocytes_and_promyelocytes)":3,
+            "lymphocyte":4,
+            "monocyte":5,
+            "neutrophil":6,
+            "platelet":7}
+    DataClass = getattr(medmnist, "BloodMNIST")
+
+    data_transform = transforms.Compose(
+            [transforms.ToTensor(),
+            transforms.Normalize(mean=[.5], std=[.5])])
+    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
+    IMAGE_DIMENSION = 28
+
 
 START_TIMESTAMP = args['t']
 
 
 def createSingleBatch(aImage):
-    tmp = transforms.ToTensor()((aImage)).to(DEVICE)
+    if args['data'] == "cifar":
+        tmp = transforms.ToTensor()((aImage)).to(DEVICE)
+    else:   # For now, leave for medmnist
+        trans = transforms.Compose([transforms.ToTensor(),transforms.Normalize(mean=[.5], std=[.5])])
+        tmp = trans(aImage).to(DEVICE)
+    
     singleBatch = tmp.unsqueeze_(0)
     return singleBatch
 
@@ -138,9 +279,9 @@ def classify(batch, target=None):
 def createCandidateSol():
     
     if MODE == 'RGB':
-        return Perturbation.createCandidateSol()
+        return Perturbation.createCandidateSol(IMAGE_DIMENSION)
     elif MODE == 'gray':
-        return PerturbationGrayScale.createCandidateSol()
+        return PerturbationGrayScale.createCandidateSol(IMAGE_DIMENSION)
     else:
         exit() # crash
 
@@ -149,9 +290,9 @@ def createChildSol(possiblePerturbations, f=0.5):
     x1, x2, x3 = np.random.choice(possiblePerturbations, 3)
 
     if MODE == 'RGB':
-        return Perturbation.createChildSol(x1, x2, x3, f)
+        return Perturbation.createChildSol(x1, x2, x3, f, IMAGE_DIMENSION)
     elif MODE == 'gray':
-        return PerturbationGrayScale.createChildSol(x1, x2, x3, f)
+        return PerturbationGrayScale.createChildSol(x1, x2, x3, f, IMAGE_DIMENSION)
     else:
         exit() # crash
 
@@ -166,9 +307,9 @@ def createBestTwoSol(possiblePerturbations, best):
     f = getF()
 
     if MODE == 'RGB':
-        return Perturbation.createBestTwoSol(x1, x2, x3, x4, f, best)
+        return Perturbation.createBestTwoSol(x1, x2, x3, x4, f, best, IMAGE_DIMENSION)
     elif MODE == 'gray':
-        return PerturbationGrayScale.createBestTwoSol(x1, x2, x3, x4, f, best)
+        return PerturbationGrayScale.createBestTwoSol(x1, x2, x3, x4, f, best, IMAGE_DIMENSION)
     else:
         exit() # crash
 
@@ -257,8 +398,12 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
 def main():
 
     for image in IMAGES:
-
-        srcImage = img.open('{}/{}.png'.format(PATH, image))
+        
+        
+        if args['data'] == "cifar":
+            srcImage = img.open('{}/{}.png'.format(PATH, image))
+        else:   # For now, leave for medmnist
+            srcImage = medmnistDataset[image][0]
 
         # Create a single batch for the source image
         batch = createSingleBatch(srcImage)
@@ -273,8 +418,12 @@ def main():
             dir_path(RESULTS_PATH)
 
             with open(RESULTS_PATH+"{}.txt".format(HOST), 'a') as f:
-                f.write("{} {} {:.4f} {} {:.4f} {} {:.4f} {}\n".format(image, oClass, oConf, target, highest.targetConfidence,
-                        highest.classification, highest.classificationConfidence, (highest.getCoords, highest.getRGB)))
+                if MODE == "RGB":
+                    f.write("{} {} {:.4f} {} {:.4f} {} {:.4f} {}\n".format(image, oClass, oConf, target, highest.targetConfidence,
+                            highest.classification, highest.classificationConfidence, (highest.getCoords, highest.getRGB)))
+                else:
+                    f.write("{} {} {:.4f} {} {:.4f} {} {:.4f} {}\n".format(image, oClass, oConf, target, highest.targetConfidence,
+                            highest.classification, highest.classificationConfidence, (highest.getCoords, highest.getGray)))
             del highest
         srcImage.close()
 
@@ -297,37 +446,47 @@ if __name__ == '__main__':
     elif MODEL == 'fer':
         net = vgg.Vgg()
         MODEL_PATH = '../models/VGGNet'
-
+    elif MODEL == "path":
+        net = medNets.ResNet18(in_channels=DATASET_INFO["n_channels"], num_classes=9)
+        MODEL_PATH = "../models/resnet18_28_1-path.pth"
+    elif MODEL == "breast":
+        net = medNets.ResNet18(in_channels=3, num_classes=2)
+        MODEL_PATH = "../models/resnet18_28_1-breast.pth"
+    elif MODEL == "pne":
+        net = medNets.ResNet18(in_channels=3, num_classes=2)
+        MODEL_PATH = "../models/resnet18_28_1-pne.pth"
+    elif MODEL == "oct":
+        net = medNets.ResNet18(in_channels=3, num_classes=4)
+        MODEL_PATH = "../models/resnet18_28_1-oct.pth"
+    elif MODEL == "blood":
+        net = medNets.ResNet18(in_channels=3, num_classes=8)
+        MODEL_PATH = "../models/resnet18_28_1-blood.pth"
     if torch.cuda.is_available():
         DEVICE = torch.device("cuda")
     else:
         raise Exception("Need CUDA to run this program.")
 
-    net = nn.DataParallel(net)
-    net.to(DEVICE)
-    net.load_state_dict(torch.load(MODEL_PATH), strict=False)
+    if args['data'] == 'cifar':
+        net = nn.DataParallel(net)
+        net.to(DEVICE)
+        net.load_state_dict(torch.load(MODEL_PATH), strict=False)
+    else:
+        net.to(DEVICE)
+        net.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE)['net'], strict=True)
 
     TRANSFORM = transforms.Compose([transforms.ToTensor()])
 
-    IMAGES = set(args['i']) if not RAND else random.sample(
-        range(0, 300000 + 1), args['n'])
-
-    CLASSES = ('plane', 'car', 'bird', 'cat',
-               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-    CLASS_DICT = {'plane': 0, 'car': 1, 'bird': 2, 'cat': 3,
-                  'deer': 4, 'dog': 5, 'frog': 6, 'horse': 7, 'ship': 8, 'truck': 9}
-
-    PATH = args['data']
-
-    d = np.zeros((32,32))
+    d = np.zeros((28,28))
 
     RESULTS_PATH = '../results/{}/'.format(START_TIMESTAMP)
 
     try:
         os.mkdir(os.path.dirname(RESULTS_PATH))
     except:
-        raise NotADirectoryError
+        try:
+            os.path.exists(os.path.dirname(RESULTS_PATH))
+        except:
+            raise NotADirectoryError
     
     with open(RESULTS_PATH+"{}.txt".format(HOST), 'a') as f:
         f.write("MODEL: {}\n".format(MODEL))
@@ -335,8 +494,12 @@ if __name__ == '__main__':
         f.write("HOST: {}\n".format(HOST))
         f.write("SEED: {}\n".format(SEED))
         for i in IMAGES:
-            f.write("IMAGE: {}.png\n".format(i))
-    print("now")
+            if args['data'] == "cifar":
+                f.write("IMAGE: {}.png\n".format(i))
+            else:
+                f.write("IMAGE: {}\n".format(i))
+
     main()
-    ax = sns.heatmap(d, robust=True, cmap='rainbow')
-    plt.savefig("test3.png")
+    #ax = sns.heatmap(d, robust=True, cmap='rainbow', yticklabels=False, xticklabels=False)
+    #ax.tick_params(left=False, bottom=False)
+    #plt.savefig("breast-hm.png")
