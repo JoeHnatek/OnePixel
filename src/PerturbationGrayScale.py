@@ -32,12 +32,12 @@ random.seed(SEED)
 np.random.seed(SEED)
 
 class PerturbationGrayScale:
-    def __init__(self, x, y, gray, filename=None, tClass=None, tConf=None, aClass=None, aClassConf=None):
+    def __init__(self, x, y, gray, dim=32, filename=None, tClass=None, tConf=None, aClass=None, aClassConf=None):
 
         assert (x >= 0 and x <=
-                31), "Value given for x is not between 0 and 31. Given: {}".format(x)
+                dim), "Value given for x is not between 0 and dim. Given: {}".format(x)
         assert (y >= 0 and y <=
-                31), "Value given for y is not between 0 and 31. Given: {}".format(y)
+                dim), "Value given for y is not between 0 and dim. Given: {}".format(y)
         assert (gray >= 0 and gray <=
                 255), "Value given for gray is not between 0 and 255. Given: {}".format(gray)
 
@@ -127,27 +127,27 @@ class PerturbationGrayScale:
         return """(x,y)\t: ({}, {})\nGray\t: ({})
         \nTarget Class\t: {}\nTarget\t: {}\nClass\t: {}\nClass Confidence\t: {}\n""".format(self.__x, self.__y, self.__gray,
                                                                                             self.__tClassification, self.__tConfidence, self.__classification, self.__classificationConfidence)
-def createCandidateSol():
+def createCandidateSol(dim):
     # Create the gray and xy values
     gray = int(np.random.default_rng().normal(128, 127)) % 256
 
-    x = random.randint(0, 32-1)
-    y = random.randint(0, 32-1)
+    x = random.randint(0, dim-1)
+    y = random.randint(0, dim-1)
 
     return PerturbationGrayScale(x, y, gray)
 
-def createChildSol(x1, x2, x3, f=0.5):
+def createChildSol(x1, x2, x3, f, dim):
 
-    x = int(x1.getX + f * (x2.getX - x3.getX)) % 32
-    y = int(x1.getY + f * (x2.getY - x3.getY)) % 32
+    x = int(x1.getX + f * (x2.getX - x3.getX)) % dim
+    y = int(x1.getY + f * (x2.getY - x3.getY)) % dim
     gray = int(x1.getGray + f * (x2.getGray - x3.getGray)) % 256
 
     return PerturbationGrayScale(x, y, gray)
 
-def createBestTwoSol(x1, x2, x3, x4, f, best):
+def createBestTwoSol(x1, x2, x3, x4, f, best, dim):
 
-    x = int(best.getX + f * (x1.getX - x2.getX) + f * (x3.getX - x4.getX)) % 32
-    y = int(best.getY + f * (x1.getY - x2.getY) + f * (x3.getY - x4.getY)) % 32
+    x = int(best.getX + f * (x1.getX - x2.getX) + f * (x3.getX - x4.getX)) % dim
+    y = int(best.getY + f * (x1.getY - x2.getY) + f * (x3.getY - x4.getY)) % dim
     gray = int(best.getGray + f * (x1.getGray - x2.getGray) + f * (x3.getGray - x4.getGray)) % 256
 
     return PerturbationGrayScale(x, y, gray)
