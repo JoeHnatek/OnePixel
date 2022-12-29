@@ -14,3 +14,8 @@
 *.png
 main.py
 /PresentationPictures
+.vscode/
+master.zip
+src/test.py
+src/~/
+test.py
