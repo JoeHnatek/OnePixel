@@ -45,6 +45,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import medmnist
 from medmnist import INFO, Evaluator
+import settings
+
 
 SEED = 0
 torch.manual_seed(SEED)
@@ -52,13 +54,11 @@ random.seed(SEED)
 np.random.seed(SEED)
 torch.cuda.manual_seed_all(SEED)
 
-
 def dir_path(string):
     if os.path.exists(string):
         return string
     else:
         raise NotADirectoryError(string)
-
 
 def network(string):
     networks = ["allcnn", "nin", "vgg", "path", "breast", "pne", "oct", "blood"]
@@ -78,170 +78,6 @@ def mode(string):
         parser.error(
             f"Value: {string}, is not a valid mode to attack\nValid modes: RGB, gray")
 
-parser = argparse.ArgumentParser(
-    description="Perform one-pixel attacks on images")
-parser.add_argument('-data', type=str, default='cifar')
-parser.add_argument('-model', type=network)
-parser.add_argument('-mode', type=mode)
-parser.add_argument('-n', type=int, default=1)
-parser.add_argument('-i', nargs="+", type=int)
-parser.add_argument('-t', type=str, default=datetime.now().strftime("%Y%m%dT%H%M%S"))
-args = parser.parse_args()
-
-
-args = vars(parser.parse_args())
-for key in args:
-    value = args[key]
-    if value == None:
-        parser.error("Missing required argument for -{}".format(key))
-
-if len(args['i']) == 1 and args['i'][0] == -1:
-    RAND = True
-else:
-    RAND = False
-    assert len(
-        args['i']) == args['n'], "Number of images to attack is not equal to the number of indexes given"
-    for i in args['i']:
-        if i < 0:
-            parser.error(
-                "Random mode is off - An index given in the -i flag is negative, please remove value: {}".format(i))
-
-if args['data'] == "cifar":
-    PATH = "../cifar-10-kaggle/test"
-    IMAGES = set(args['i']) if not RAND else random.sample(
-        range(0, 300000 + 1), args['n'])
-    CLASSES = ('plane', 'car', 'bird', 'cat',
-               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-    CLASS_DICT = {'plane': 0, 'car': 1, 'bird': 2, 'cat': 3,
-                  'deer': 4, 'dog': 5, 'frog': 6, 'horse': 7, 'ship': 8, 'truck': 9}
-
-    IMAGE_DIMENSION = 32
-    
-elif args['data'] == "path":
-    DATASET_INFO = INFO["pathmnist"]
-    IMAGES = set(args['i']) if not RAND else random.sample(
-        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
-    CLASSES = (
-            "adipose",
-            "background",
-            "debris",
-            "lymphocytes",
-            "mucus",
-            "smooth_muscle",
-            "normal_colon_mucosa",
-            "cancer-associated_stroma",
-            "colorectal_adenocarcinoma_epithelium")
-
-    CLASS_DICT = {"adipose": 0,
-            "background": 1,
-            "debris": 2,
-            "lymphocytes": 3,
-            "mucus": 4,
-            "smooth_muscle": 5,
-            "normal_colon_mucosa": 6,
-            "cancer-associated_stroma": 7,
-            "colorectal_adenocarcinoma_epithelium": 8}
-    DataClass = getattr(medmnist, "PathMNIST")
-
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
-    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=False)
-    IMAGE_DIMENSION = 28
-elif args['data'] == 'breast':
-    DATASET_INFO = INFO["breastmnist"]
-    IMAGES = set(args['i']) if not RAND else random.sample(
-        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
-    CLASSES = (
-            "malignant",
-            "normal, benign",
-            )
-
-    CLASS_DICT = {"malignant": 0,
-            "normal, benign": 1}
-    DataClass = getattr(medmnist, "BreastMNIST")
-
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
-    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
-    IMAGE_DIMENSION = 28
-elif args['data'] == 'pne':
-    DATASET_INFO = INFO["pneumoniamnist"]
-    IMAGES = set(args['i']) if not RAND else random.sample(
-        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
-    CLASSES = (
-            "normal",
-            "pneumonia",
-            )
-
-    CLASS_DICT = {"normal": 0,
-            "pneumonia": 1}
-    DataClass = getattr(medmnist, "PneumoniaMNIST")
-
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
-    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
-    IMAGE_DIMENSION = 28
-elif args['data'] == 'oct':
-    DATASET_INFO = INFO["octmnist"]
-    IMAGES = set(args['i']) if not RAND else random.sample(
-        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
-    CLASSES = (
-            "choroidal neovascularization",
-            "diabetic macular edema",
-            "drusen",
-            "normal"
-            )
-
-    CLASS_DICT = {"choroidal neovascularization":0,
-            "diabetic macular edema":1,
-            "drusen":2,
-            "normal":3}
-    DataClass = getattr(medmnist, "OCTMNIST")
-
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
-    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
-    IMAGE_DIMENSION = 28
-elif args['data'] == 'blood':
-    DATASET_INFO = INFO["bloodmnist"]
-    IMAGES = set(args['i']) if not RAND else random.sample(
-        range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
-    CLASSES = (
-            "basophil",
-            "eosinophil",
-            "erythroblast",
-            "immature_granulocytes(myelocytes,_metamyelocytes_and_promyelocytes)",
-            "lymphocyte",
-            "monocyte",
-            "neutrophil",
-            "platelet"
-            )
-
-    CLASS_DICT = {"basophil":0,
-            "eosinophil":1,
-            "erythroblast":2,
-            "immature_granulocytes(myelocytes,_metamyelocytes_and_promyelocytes)":3,
-            "lymphocyte":4,
-            "monocyte":5,
-            "neutrophil":6,
-            "platelet":7}
-    DataClass = getattr(medmnist, "BloodMNIST")
-
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
-    medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
-    IMAGE_DIMENSION = 28
-
-
-START_TIMESTAMP = args['t']
-
-
 def createSingleBatch(aImage):
     if args['data'] == "cifar":
         tmp = transforms.ToTensor()((aImage)).to(DEVICE)
@@ -251,7 +87,6 @@ def createSingleBatch(aImage):
     
     singleBatch = tmp.unsqueeze_(0)
     return singleBatch
-
 
 def classify(batch, target=None):
     """
@@ -375,7 +210,7 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
             childPerturbation.classificationConfidence = top[1]
             
             childPerturbation.image = image2
-            d[childPerturbation.getX][childPerturbation.getY] += 1
+            #d[childPerturbation.getX][childPerturbation.getY] += 1
             parentPerturbation = copy.deepcopy(listCS[i])
 
             if (childPerturbation.targetConfidence >= 90):
@@ -394,11 +229,9 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
 
     return highest
 
-
 def main():
 
     for image in IMAGES:
-        
         
         if args['data'] == "cifar":
             srcImage = img.open('{}/{}.png'.format(PATH, image))
@@ -429,41 +262,57 @@ def main():
 
 
 if __name__ == '__main__':
+    
+    print("Loading settings...", end="", flush=True)
+
+    parser = argparse.ArgumentParser(
+    description="Perform one-pixel attacks on images")
+    parser.add_argument('-data', type=str, default='cifar')
+    parser.add_argument('-model', type=network)
+    parser.add_argument('-mode', type=mode)
+    parser.add_argument('-n', type=int, default=1)
+    parser.add_argument('-i', nargs="+", type=int)
+    parser.add_argument('-t', type=str, default=datetime.now().strftime("%Y%m%dT%H%M%S"))
+    args = parser.parse_args()
+
+    args = vars(parser.parse_args())
+    for key in args:
+        value = args[key]
+        if value == None:
+            parser.error("Missing required argument for -{}".format(key))
+
+    START_TIMESTAMP = args['t']
+
+    if len(args['i']) == 1 and args['i'][0] == -1:
+        RAND = True
+    else:
+        RAND = False
+        assert len(
+            args['i']) == args['n'], "Number of images to attack is not equal to the number of indexes given"
+        for i in args['i']:
+            if i < 0:
+                parser.error(
+                    "Random mode is off - An index given in the -i flag is negative, please remove value: {}".format(i))
+
+
+    if args['data'] == "cifar":
+
+        PATH, IMAGES, CLASSES, CLASS_DICT, IMAGE_DIMENSION = settings.cifar(args['i'], RAND)
+    
+    else:
+
+        func = getattr(settings, args['data'])
+        DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION = func(args['i'], RAND)
 
     MODEL = args['model']
     MODE = args['mode']
     HOST = socket.gethostname()
     
-    if MODEL == 'allcnn':
-        net = allCNN.Net()
-        MODEL_PATH = '../models/cifar10-allCNN-20210801T132829.pth'
-    elif MODEL == 'nin':
-        net = NiN.Net()
-        MODEL_PATH = '../models/cifar10-NiN-20210315T190616.pth'
-    elif MODEL == 'vgg':
-        net = vgg16()
-        MODEL_PATH = '../models/cifar10-VGG16-20210315T233328.pth'
-    elif MODEL == 'fer':
-        net = vgg.Vgg()
-        MODEL_PATH = '../models/VGGNet'
-    elif MODEL == "path":
-        net = medNets.ResNet18(in_channels=DATASET_INFO["n_channels"], num_classes=9)
-        MODEL_PATH = "../models/resnet18_28_1-path.pth"
-    elif MODEL == "breast":
-        net = medNets.ResNet18(in_channels=3, num_classes=2)
-        MODEL_PATH = "../models/resnet18_28_1-breast.pth"
-    elif MODEL == "pne":
-        net = medNets.ResNet18(in_channels=3, num_classes=2)
-        MODEL_PATH = "../models/resnet18_28_1-pne.pth"
-    elif MODEL == "oct":
-        net = medNets.ResNet18(in_channels=3, num_classes=4)
-        MODEL_PATH = "../models/resnet18_28_1-oct.pth"
-    elif MODEL == "blood":
-        net = medNets.ResNet18(in_channels=3, num_classes=8)
-        MODEL_PATH = "../models/resnet18_28_1-blood.pth"
-    if torch.cuda.is_available():
+    net, MODEL_PATH = settings.getModel(MODEL)
+
+    try:
         DEVICE = torch.device("cuda")
-    else:
+    except:
         raise Exception("Need CUDA to run this program.")
 
     if args['data'] == 'cifar':
@@ -476,7 +325,7 @@ if __name__ == '__main__':
 
     TRANSFORM = transforms.Compose([transforms.ToTensor()])
 
-    d = np.zeros((28,28))
+    #d = np.zeros((28,28))
 
     RESULTS_PATH = '../results/{}/'.format(START_TIMESTAMP)
 
@@ -498,7 +347,7 @@ if __name__ == '__main__':
                 f.write("IMAGE: {}.png\n".format(i))
             else:
                 f.write("IMAGE: {}\n".format(i))
-
+    print("Loaded\nRunning attacks.")
     main()
     #ax = sns.heatmap(d, robust=True, cmap='rainbow', yticklabels=False, xticklabels=False)
     #ax.tick_params(left=False, bottom=False)
