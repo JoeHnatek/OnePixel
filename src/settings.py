@@ -217,25 +217,3 @@ def getModel(modelName):
         MODEL_PATH = "../models/resnet18_28_1-blood.pth"
 
     return net, MODEL_PATH
-
-def getMedMNIST(data):
-
-    if data == "path":
-
-        DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION = settings.path(args['i'], RAND)
-        
-    elif data == 'breast':
-
-        DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION = settings.breast(args['i'], RAND)
-
-    elif data == 'pne':
-
-        DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION = settings.pne(args['i'], RAND)
-
-    elif data == 'oct':
-
-        DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION = settings.oct(args['i'], RAND)
-
-    elif data == 'blood':
-
-        DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION = settings.blood(args['i'], RAND)
