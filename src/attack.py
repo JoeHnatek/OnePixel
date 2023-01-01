@@ -135,16 +135,31 @@ def getF():
 
     return float(np.random.default_rng().normal(0.5, 0.3)) % 2
 
-def createBestTwoSol(possiblePerturbations, best):
+def getBestSolution(possiblePerturbations):
 
-    x1, x2, x3, x4 = np.random.choice(possiblePerturbations, 4)
+    # Init bestPerturbation with random index possible perturbation
+    randomIndex = random.randint(0, len(possiblePerturbations))
+    bestPerturbation = possiblePerturbations[randomIndex]
+
+    # Search for best target solution in possible pertubations list
+    for perturb in possiblePerturbations:
+        if perturb.targetConfidence > bestPerturbation.targetConfidence:
+            bestPerturbation = perturb
+
+    return bestPerturbation
+
+def createBestTwoSol(index, possiblePerturbations):
+
+    x1, x2 = np.random.choice(possiblePerturbations, 2)
+
+    best = getBestSolution(possiblePerturbations)
 
     f = getF()
 
     if MODE == 'RGB':
-        return Perturbation.createBestTwoSol(x1, x2, x3, x4, f, best, IMAGE_DIMENSION)
+        return Perturbation.createBestTwoSol(index, x1, x2, best, f, IMAGE_DIMENSION)
     elif MODE == 'gray':
-        return PerturbationGrayScale.createBestTwoSol(x1, x2, x3, x4, f, best, IMAGE_DIMENSION)
+        return PerturbationGrayScale.createBestTwoSol(index, x1, x2, best, f, IMAGE_DIMENSION)
     else:
         exit() # crash
 
@@ -195,7 +210,8 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
         for i in range(population):
 
             possiblePerturbations = listCS[i+1:]+listCS[:i]
-            childPerturbation = createChildSol(possiblePerturbations)#, highest)
+            childPerturbation = createChildSol(possiblePerturbations)
+            #childPerturbation = createBestTwoSol(listCS[i], possiblePerturbations)
 
             image2 = createImage(srcImage, childPerturbation)
 

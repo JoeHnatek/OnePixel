@@ -144,10 +144,10 @@ def createChildSol(x1, x2, x3, f, dim):
 
     return PerturbationGrayScale(x, y, gray)
 
-def createBestTwoSol(x1, x2, x3, x4, f, best, dim):
+def createBestTwoSol(index, x1, x2, best, f, dim):
 
-    x = int(best.getX + f * (x1.getX - x2.getX) + f * (x3.getX - x4.getX)) % dim
-    y = int(best.getY + f * (x1.getY - x2.getY) + f * (x3.getY - x4.getY)) % dim
-    gray = int(best.getGray + f * (x1.getGray - x2.getGray) + f * (x3.getGray - x4.getGray)) % 256
+    x = int(index.getX + f * (best.getX - index.getX) + f * (x1.getX - x2.getX)) % dim
+    y = int(index.getY + f * (best.getY - index.getY) + f * (x1.getY - x2.getY)) % dim
+    gray = int(index.getGray + f * (best.getGray - index.getGray) + f * (x1.getGray - x2.getGray)) % 256
 
     return PerturbationGrayScale(x, y, gray)
