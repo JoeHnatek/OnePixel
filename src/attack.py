@@ -27,19 +27,31 @@ import argparse
 import copy
 import os
 import numpy as np
+import socket
 import torch
 import torch.nn as nn
-import torchvision
 import torchvision.transforms as transforms
 import random
+from datetime import datetime
 from networks import allCNN
 from networks import NiN
-from Perturbation import Perturbation
+from networks import vgg
+from networks import medNets
+import Perturbation
+import PerturbationGrayScale
 from torchvision.models import vgg16
 from PIL import Image as img
+import medmnist
+from medmnist import INFO, Evaluator
+import settings
+from algo import Algo
 
-torch.manual_seed(0)
 
+SEED = 0
+torch.manual_seed(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+torch.cuda.manual_seed_all(SEED)
 
 def dir_path(string):
     if os.path.exists(string):
@@ -47,57 +59,42 @@ def dir_path(string):
     else:
         raise NotADirectoryError(string)
 
-
 def network(string):
-    networks = ["allcnn", "nin", "vgg"]
+    networks = ["allcnn", "nin", "vgg", "path", "breast", "pne", "oct", "blood"]
 
     if string in networks:
         return string
     else:
         parser.error(
-            "Value: {}, is not a valid network to attack\nValid networks: allcnn, nin, vgg".format(string))
+            f"Value: {string}, is not a valid network to attack.")
 
+def algorithm(string):
+    algos = ["de", "ade"]
 
-parser = argparse.ArgumentParser(
-    description="Perform one-pixel attacks on images")
-parser.add_argument('-data', type=dir_path, default='../cifar-10-kaggle/test')
-parser.add_argument('-model', type=network)
-parser.add_argument('-n', type=int, default=1)
-parser.add_argument('-i', nargs="+", type=int)
-args = parser.parse_args()
+    if string in algos:
+        return string
+    else:
+        parser.error(
+            f"Value: {string}, is not a valid algorithm: Differential Evolution(de), AdaptiveDE(ade)")
 
-args = vars(parser.parse_args())
-for key in args:
-    value = args[key]
-    if value == None:
-        parser.error("Missing required argument for -{}".format(key))
+def mode(string):
+    modes = ["RGB", "gray"]
 
-if len(args['i']) == 1 and args['i'][0] == -1:
-    RAND = True
-    print("RANDOM MODE ON")
-else:
-    RAND = False
-    assert len(
-        args['i']) == args['n'], "Number of images to attack is not equal to the number of indexes given"
-    for i in args['i']:
-        if i < 1:
-            parser.error(
-                "Random mode is off - An index given in the -i flag is negative, please remove value: {}".format(i))
-
-
-def sortDirectory(aList):
-    result = []
-    for i in aList:
-        result.append(int(i.split(".")[0]))  # Split on '.png'
-
-    return sorted(result)
-
+    if string in modes:
+        return string
+    else:
+        parser.error(
+            f"Value: {string}, is not a valid mode to attack\nValid modes: RGB, gray")
 
 def createSingleBatch(aImage):
-    tmp = transforms.ToTensor()((aImage)).to(DEVICE)
+    if args['data'] == "cifar":
+        tmp = transforms.ToTensor()((aImage)).to(DEVICE)
+    else:   # For now, leave for medmnist
+        trans = transforms.Compose([transforms.ToTensor(),transforms.Normalize(mean=[.5], std=[.5])])
+        tmp = trans(aImage).to(DEVICE)
+    
     singleBatch = tmp.unsqueeze_(0)
     return singleBatch
-
 
 def classify(batch, target=None):
     """
@@ -123,29 +120,56 @@ def classify(batch, target=None):
 
 
 def createCandidateSol():
-    # Create the rgb and xy values
-    r = int(numpy.random.default_rng().normal(128, 127)) % 256
-    g = int(numpy.random.default_rng().normal(128, 127)) % 256
-    b = int(numpy.random.default_rng().normal(128, 127)) % 256
-
-    x = random.randint(0, 32-1)
-    y = random.randint(0, 32-1)
-
-    return Perturbation(x, y, r, g, b)
-
+    
+    if MODE == 'RGB':
+        return Perturbation.createCandidateSol(IMAGE_DIMENSION)
+    elif MODE == 'gray':
+        return PerturbationGrayScale.createCandidateSol(IMAGE_DIMENSION)
+    else:
+        exit() # crash
 
 def createChildSol(possiblePerturbations, f=0.5):
 
-    x1, x2, x3 = numpy.random.choice(possiblePerturbations, 3)
+    x1, x2, x3 = np.random.choice(possiblePerturbations, 3)
 
-    x = int(x1.getX + f * (x2.getX - x3.getX)) % 32
-    y = int(x1.getY + f * (x2.getY - x3.getY)) % 32
-    r = int(x1.getR + f * (x2.getR - x3.getR)) % 256
-    g = int(x1.getG + f * (x2.getG - x3.getG)) % 256
-    b = int(x1.getB + f * (x2.getB - x3.getB)) % 256
+    if MODE == 'RGB':
+        return Perturbation.createChildSol(x1, x2, x3, f, IMAGE_DIMENSION)
+    elif MODE == 'gray':
+        return PerturbationGrayScale.createChildSol(x1, x2, x3, f, IMAGE_DIMENSION)
+    else:
+        exit() # crash
 
-    return Perturbation(x, y, r, g, b)
+def getF():
 
+    return float(np.random.default_rng().normal(0.5, 0.3)) % 2
+
+def getBestSolution(possiblePerturbations):
+
+    # Init bestPerturbation with random index possible perturbation
+    randomIndex = random.randint(0, len(possiblePerturbations) - 1)
+    bestPerturbation = possiblePerturbations[randomIndex]
+
+    # Search for best target solution in possible pertubations list
+    for perturb in possiblePerturbations:
+        if perturb.targetConfidence > bestPerturbation.targetConfidence:
+            bestPerturbation = perturb
+
+    return bestPerturbation
+
+def createBestTwoSol(index, possiblePerturbations):
+
+    x1, x2 = np.random.choice(possiblePerturbations, 2)
+
+    best = getBestSolution(possiblePerturbations)
+
+    f = getF()
+
+    if MODE == 'RGB':
+        return Perturbation.createBestTwoSol(index, x1, x2, best, f, IMAGE_DIMENSION)
+    elif MODE == 'gray':
+        return PerturbationGrayScale.createBestTwoSol(index, x1, x2, best, f, IMAGE_DIMENSION)
+    else:
+        exit() # crash
 
 def createImage(image, p):
     image = copy.deepcopy(image)
@@ -153,12 +177,29 @@ def createImage(image, p):
 
     return image
 
-
 def attackDE(image, target, imageFilename, f=0.5, population=400):
 
     srcImage = copy.deepcopy(image)
     MAX_ITER = 100
     highest = None
+    learn = False
+
+    if ALGO is Algo.ADE:
+        probList = [random.randint(0, 100)/100 for i in range(population)] # Unsure if this list stays constant, or updates after 50 iterations (learning period)
+
+        p1 = 0.50
+        p2 = 0.50
+        indx = -1
+        best = -1
+
+        ns1 = 0
+        ns2 = 0
+        nf1 = 0
+        nf2 = 0
+
+        learn = True
+
+        typeDE = Algo.RAND1
 
     listCS = [createCandidateSol() for i in range(population)]
 
@@ -193,8 +234,18 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
     while a < MAX_ITER and stop == False:
         for i in range(population):
 
-            possiblePerturbations = listCS[i:]+listCS[:i-1]
-            childPerturbation = createChildSol(possiblePerturbations)
+            possiblePerturbations = listCS[i+1:]+listCS[:i]
+            if ALGO is Algo.DE:
+                childPerturbation = createChildSol(possiblePerturbations)
+            elif ALGO is Algo.ADE:
+                if probList[i] <= p1:
+                    childPerturbation = createChildSol(possiblePerturbations)
+                    typeDE = Algo.RAND1
+                else:
+                    childPerturbation = createBestTwoSol(listCS[i], possiblePerturbations)
+                    typeDE = Algo.BEST2
+            else:
+                exit(f"Wrong ALGO given: {ALGO}")
 
             image2 = createImage(srcImage, childPerturbation)
 
@@ -207,20 +258,44 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
             childPerturbation.targetConfidence = con
             childPerturbation.classification = top[0]
             childPerturbation.classificationConfidence = top[1]
-
             childPerturbation.image = image2
 
-            parentPerturbation = listCS[i]
+            parentPerturbation = copy.deepcopy(listCS[i])
 
-            if (childPerturbation.targetConfidence >= 90):
+            if (childPerturbation.targetConfidence >= 90):  # Found solution
                 stop = True
                 highest = copy.deepcopy(childPerturbation)
 
             if childPerturbation.targetConfidence > parentPerturbation.targetConfidence:
-                listCS[i] = childPerturbation
+                listCS[i] = copy.deepcopy(childPerturbation)
+
+                if learn:
+                    if typeDE is Algo.RAND1:
+                        ns1+=1
+                    elif typeDE is Algo.BEST2:
+                        ns2+=1
+                    else:
+                        exit(f"Wrong typeDE given: {typeDE}")
+            else:
+
+                if learn:
+                    if typeDE is Algo.RAND1:
+                        nf1+=1
+                    elif typeDE is Algo.BEST2:
+                        nf2+=1
+                    else:
+                        exit(f"Wrong typeDE given: {typeDE}")
 
             if (childPerturbation.targetConfidence > highest.targetConfidence):
                 highest = copy.deepcopy(childPerturbation)
+
+        if a == 49 and ALGO is Algo.ADE: # ADE learning period is over
+            if (ns2 * (ns1 + nf1) + ns1 * (ns2 + nf2)) == 0:
+                p1 = .5
+            else:
+                p1 = (ns1 * (ns2 + nf2)) / (ns2 * (ns1 + nf1) + ns1 * (ns2 + nf2))
+            p2 = 1 - p1
+            learn = False
 
         a += 1
     for p in listCS:
@@ -228,12 +303,14 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
 
     return highest
 
-
 def main():
 
     for image in IMAGES:
-
-        srcImage = img.open('{}/{}.png'.format(PATH, image))
+        
+        if args['data'] == "cifar":
+            srcImage = img.open('{}/{}.png'.format(PATH, image))
+        else:   # For now, leave for medmnist
+            srcImage = medmnistDataset[image][0]
 
         # Create a single batch for the source image
         batch = createSingleBatch(srcImage)
@@ -244,47 +321,109 @@ def main():
             if target == oClass:
                 continue
             highest = attackDE(srcImage, target, image)
+            
+            dir_path(RESULTS_PATH)
 
-            with open('results1.txt', 'a') as f:
-                f.write("{} {} {:.4f} {} {:.4f} {} {:.4f} {}\n".format(image, oClass, oConf, target, highest.targetConfidence,
-                        highest.classification, highest.classificationConfidence, (highest.getCoords, highest.getRGB)))
+            with open(RESULTS_PATH+"{}.txt".format(HOST), 'a') as f:
+                if MODE == "RGB":
+                    f.write("{} {} {:.4f} {} {:.4f} {} {:.4f} {}\n".format(image, oClass, oConf, target, highest.targetConfidence,
+                            highest.classification, highest.classificationConfidence, (highest.getCoords, highest.getRGB)))
+                else:
+                    f.write("{} {} {:.4f} {} {:.4f} {} {:.4f} {}\n".format(image, oClass, oConf, target, highest.targetConfidence,
+                            highest.classification, highest.classificationConfidence, (highest.getCoords, highest.getGray)))
             del highest
         srcImage.close()
 
 
 if __name__ == '__main__':
+    
+    print("Loading settings...", end="", flush=True)
 
-    if args['model'] == 'allcnn':
-        net = allCNN.Net()
-        PATH = '../models/cifar10-allCNN-20210801T132829.pth'
-    elif args['model'] == 'nin':
-        net = NiN.Net()
-        PATH = '../models/cifar10-NiN-20210315T190616.pth'
-    elif args['model'] == 'vgg':
-        net = vgg16()
-        PATH = '../models/cifar10-VGG16-20210315T233328.pth'
+    parser = argparse.ArgumentParser(
+    description="Perform one-pixel attacks on images")
+    parser.add_argument('-data', type=str, default='cifar')
+    parser.add_argument('-model', type=network)
+    parser.add_argument('-mode', type=mode)
+    parser.add_argument('-n', type=int, default=1)
+    parser.add_argument('-i', nargs="+", type=int)
+    parser.add_argument('-t', type=str, default=datetime.now().strftime("%Y%m%dT%H%M%S"))
+    parser.add_argument('-a', type=algorithm)
+    
+    args = parser.parse_args()
 
-    if torch.cuda.is_available():
-        DEVICE = torch.device("cuda")
-        torch.cuda.manual_seed_all(0)
+    args = vars(parser.parse_args())
+    for key in args:
+        value = args[key]
+        if value == None:
+            parser.error("Missing required argument for -{}".format(key))
+
+    START_TIMESTAMP = args['t']
+
+    if len(args['i']) == 1 and args['i'][0] == -1:
+        RAND = True
     else:
+        RAND = False
+        assert len(
+            args['i']) == args['n'], "Number of images to attack is not equal to the number of indexes given"
+        for i in args['i']:
+            if i < 0:
+                parser.error(
+                    "Random mode is off - An index given in the -i flag is negative, please remove value: {}".format(i))
+
+
+    if args['data'] == "cifar":
+
+        PATH, IMAGES, CLASSES, CLASS_DICT, IMAGE_DIMENSION = settings.cifar(args['i'], RAND)
+    
+    else:
+
+        func = getattr(settings, args['data'])
+        DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, medmnistDataset, IMAGE_DIMENSION = func(args['i'], RAND)
+
+    MODEL = args['model']
+    MODE = args['mode']
+    HOST = socket.gethostname()
+    
+    net, MODEL_PATH = settings.getModel(MODEL)
+
+    try:
+        DEVICE = torch.device("cuda")
+    except:
         raise Exception("Need CUDA to run this program.")
 
-    net = nn.DataParallel(net)
-    net.to(DEVICE)
-    net.load_state_dict(torch.load(PATH), strict=False)
+    if args['data'] == 'cifar':
+        net = nn.DataParallel(net)
+        net.to(DEVICE)
+        net.load_state_dict(torch.load(MODEL_PATH), strict=False)
+    else:
+        net.to(DEVICE)
+        net.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE)['net'], strict=True)
 
-    TRANSFORM = transforms.Compose([transforms.ToTensor()])
+    if args['a'] == 'de':
+        ALGO = Algo.DE # Differential Evo
+    else:
+        ALGO = Algo.ADE    # Adaptive Differential Evo
 
-    IMAGES = set(args['i']) if not RAND else random.sample(
-        range(0, 300000 + 1), args['n'])
+    RESULTS_PATH = '../results/{}/'.format(START_TIMESTAMP)
 
-    CLASSES = ('plane', 'car', 'bird', 'cat',
-               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-    CLASS_DICT = {'plane': 0, 'car': 1, 'bird': 2, 'cat': 3,
-                  'deer': 4, 'dog': 5, 'frog': 6, 'horse': 7, 'ship': 8, 'truck': 9}
-
-    PATH = args['data']
-
+    try:
+        os.mkdir(os.path.dirname(RESULTS_PATH))
+    except:
+        try:
+            os.path.exists(os.path.dirname(RESULTS_PATH))
+        except:
+            raise NotADirectoryError
+    
+    with open(RESULTS_PATH+"{}.txt".format(HOST), 'a') as f:
+        f.write("MODEL: {}\n".format(MODEL))
+        f.write("MODEL_PATH: {}\n".format(MODEL_PATH))
+        f.write("HOST: {}\n".format(HOST))
+        f.write("SEED: {}\n".format(SEED))
+        f.write("AlGO: {}\n".format(ALGO))
+        for i in IMAGES:
+            if args['data'] == "cifar":
+                f.write("IMAGE: {}.png\n".format(i))
+            else:
+                f.write("IMAGE: {}\n".format(i))
+    print("Loaded\nRunning attacks.")
     main()

@@ -8,6 +8,14 @@
 /cifar-10-kaggle
 /pytorch-grad-cam
 /models
+/results
+/src/dist.py
 *.txt
 *.png
 main.py
+/PresentationPictures
+.vscode/
+master.zip
+src/test.py
+src/~/
+test.py
