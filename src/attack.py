@@ -41,11 +41,10 @@ import Perturbation
 import PerturbationGrayScale
 from torchvision.models import vgg16
 from PIL import Image as img
-import matplotlib.pyplot as plt
-import seaborn as sns
 import medmnist
 from medmnist import INFO, Evaluator
 import settings
+from algo import Algo
 
 
 SEED = 0
@@ -67,7 +66,16 @@ def network(string):
         return string
     else:
         parser.error(
-            f"Value: {string}, is not a valid network to attack\nValid networks: allcnn, nin, vgg")
+            f"Value: {string}, is not a valid network to attack.")
+
+def algorithm(string):
+    algos = ["de", "ade"]
+
+    if string in algos:
+        return string
+    else:
+        parser.error(
+            f"Value: {string}, is not a valid algorithm: Differential Evolution(de), AdaptiveDE(ade)")
 
 def mode(string):
     modes = ["RGB", "gray"]
@@ -138,7 +146,7 @@ def getF():
 def getBestSolution(possiblePerturbations):
 
     # Init bestPerturbation with random index possible perturbation
-    randomIndex = random.randint(0, len(possiblePerturbations))
+    randomIndex = random.randint(0, len(possiblePerturbations) - 1)
     bestPerturbation = possiblePerturbations[randomIndex]
 
     # Search for best target solution in possible pertubations list
@@ -169,12 +177,29 @@ def createImage(image, p):
 
     return image
 
-
 def attackDE(image, target, imageFilename, f=0.5, population=400):
 
     srcImage = copy.deepcopy(image)
     MAX_ITER = 100
     highest = None
+    learn = False
+
+    if ALGO is Algo.ADE:
+        probList = [random.randint(0, 100)/100 for i in range(population)] # Unsure if this list stays constant, or updates after 50 iterations (learning period)
+
+        p1 = 0.50
+        p2 = 0.50
+        indx = -1
+        best = -1
+
+        ns1 = 0
+        ns2 = 0
+        nf1 = 0
+        nf2 = 0
+
+        learn = True
+
+        typeDE = Algo.RAND1
 
     listCS = [createCandidateSol() for i in range(population)]
 
@@ -210,8 +235,17 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
         for i in range(population):
 
             possiblePerturbations = listCS[i+1:]+listCS[:i]
-            childPerturbation = createChildSol(possiblePerturbations)
-            #childPerturbation = createBestTwoSol(listCS[i], possiblePerturbations)
+            if ALGO is Algo.DE:
+                childPerturbation = createChildSol(possiblePerturbations)
+            elif ALGO is Algo.ADE:
+                if probList[i] <= p1:
+                    childPerturbation = createChildSol(possiblePerturbations)
+                    typeDE = Algo.RAND1
+                else:
+                    childPerturbation = createBestTwoSol(listCS[i], possiblePerturbations)
+                    typeDE = Algo.BEST2
+            else:
+                exit(f"Wrong ALGO given: {ALGO}")
 
             image2 = createImage(srcImage, childPerturbation)
 
@@ -224,20 +258,44 @@ def attackDE(image, target, imageFilename, f=0.5, population=400):
             childPerturbation.targetConfidence = con
             childPerturbation.classification = top[0]
             childPerturbation.classificationConfidence = top[1]
-            
             childPerturbation.image = image2
-            #d[childPerturbation.getX][childPerturbation.getY] += 1
+
             parentPerturbation = copy.deepcopy(listCS[i])
 
-            if (childPerturbation.targetConfidence >= 90):
+            if (childPerturbation.targetConfidence >= 90):  # Found solution
                 stop = True
                 highest = copy.deepcopy(childPerturbation)
 
             if childPerturbation.targetConfidence > parentPerturbation.targetConfidence:
                 listCS[i] = copy.deepcopy(childPerturbation)
 
+                if learn:
+                    if typeDE is Algo.RAND1:
+                        ns1+=1
+                    elif typeDE is Algo.BEST2:
+                        ns2+=1
+                    else:
+                        exit(f"Wrong typeDE given: {typeDE}")
+            else:
+
+                if learn:
+                    if typeDE is Algo.RAND1:
+                        nf1+=1
+                    elif typeDE is Algo.BEST2:
+                        nf2+=1
+                    else:
+                        exit(f"Wrong typeDE given: {typeDE}")
+
             if (childPerturbation.targetConfidence > highest.targetConfidence):
                 highest = copy.deepcopy(childPerturbation)
+
+        if a == 49 and ALGO is Algo.ADE: # ADE learning period is over
+            if (ns2 * (ns1 + nf1) + ns1 * (ns2 + nf2)) == 0:
+                p1 = .5
+            else:
+                p1 = (ns1 * (ns2 + nf2)) / (ns2 * (ns1 + nf1) + ns1 * (ns2 + nf2))
+            p2 = 1 - p1
+            learn = False
 
         a += 1
     for p in listCS:
@@ -289,6 +347,8 @@ if __name__ == '__main__':
     parser.add_argument('-n', type=int, default=1)
     parser.add_argument('-i', nargs="+", type=int)
     parser.add_argument('-t', type=str, default=datetime.now().strftime("%Y%m%dT%H%M%S"))
+    parser.add_argument('-a', type=algorithm)
+    
     args = parser.parse_args()
 
     args = vars(parser.parse_args())
@@ -318,7 +378,7 @@ if __name__ == '__main__':
     else:
 
         func = getattr(settings, args['data'])
-        DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION = func(args['i'], RAND)
+        DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, medmnistDataset, IMAGE_DIMENSION = func(args['i'], RAND)
 
     MODEL = args['model']
     MODE = args['mode']
@@ -339,9 +399,10 @@ if __name__ == '__main__':
         net.to(DEVICE)
         net.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE)['net'], strict=True)
 
-    TRANSFORM = transforms.Compose([transforms.ToTensor()])
-
-    #d = np.zeros((28,28))
+    if args['a'] == 'de':
+        ALGO = Algo.DE # Differential Evo
+    else:
+        ALGO = Algo.ADE    # Adaptive Differential Evo
 
     RESULTS_PATH = '../results/{}/'.format(START_TIMESTAMP)
 
@@ -358,6 +419,7 @@ if __name__ == '__main__':
         f.write("MODEL_PATH: {}\n".format(MODEL_PATH))
         f.write("HOST: {}\n".format(HOST))
         f.write("SEED: {}\n".format(SEED))
+        f.write("AlGO: {}\n".format(ALGO))
         for i in IMAGES:
             if args['data'] == "cifar":
                 f.write("IMAGE: {}.png\n".format(i))
@@ -365,6 +427,3 @@ if __name__ == '__main__':
                 f.write("IMAGE: {}\n".format(i))
     print("Loaded\nRunning attacks.")
     main()
-    #ax = sns.heatmap(d, robust=True, cmap='rainbow', yticklabels=False, xticklabels=False)
-    #ax.tick_params(left=False, bottom=False)
-    #plt.savefig("breast-hm.png")
