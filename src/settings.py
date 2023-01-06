@@ -73,13 +73,10 @@ def path(images, RAND):
             "colorectal_adenocarcinoma_epithelium": 8}
     DataClass = getattr(medmnist, "PathMNIST")
 
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
     medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=False)
     IMAGE_DIMENSION = 28
 
-    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION
+    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, medmnistDataset, IMAGE_DIMENSION
 
 def breast(images, RAND):
 
@@ -88,20 +85,17 @@ def breast(images, RAND):
         range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
     CLASSES = (
             "malignant",
-            "normal, benign",
+            "normal,_benign",
             )
 
     CLASS_DICT = {"malignant": 0,
-            "normal, benign": 1}
+            "normal,_benign": 1}
     DataClass = getattr(medmnist, "BreastMNIST")
 
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
     medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
     IMAGE_DIMENSION = 28
 
-    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION
+    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, medmnistDataset, IMAGE_DIMENSION
 
 def pne(images, RAND):
     
@@ -117,13 +111,10 @@ def pne(images, RAND):
             "pneumonia": 1}
     DataClass = getattr(medmnist, "PneumoniaMNIST")
 
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
     medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
     IMAGE_DIMENSION = 28
 
-    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION
+    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, medmnistDataset, IMAGE_DIMENSION
 
 def oct(images, RAND):
     
@@ -131,25 +122,22 @@ def oct(images, RAND):
     IMAGES = set(images) if not RAND else random.sample(
         range(0, DATASET_INFO["n_samples"]["test"] + 1), args['n'])
     CLASSES = (
-            "choroidal neovascularization",
-            "diabetic macular edema",
+            "choroidal_neovascularization",
+            "diabetic_macular_edema",
             "drusen",
             "normal"
             )
 
-    CLASS_DICT = {"choroidal neovascularization":0,
-            "diabetic macular edema":1,
+    CLASS_DICT = {"choroidal_neovascularization":0,
+            "diabetic macular_edema":1,
             "drusen":2,
             "normal":3}
     DataClass = getattr(medmnist, "OCTMNIST")
 
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
     medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
     IMAGE_DIMENSION = 28
 
-    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION
+    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, medmnistDataset, IMAGE_DIMENSION
 
 def blood(images, RAND):
     
@@ -177,13 +165,10 @@ def blood(images, RAND):
             "platelet":7}
     DataClass = getattr(medmnist, "BloodMNIST")
 
-    data_transform = transforms.Compose(
-            [transforms.ToTensor(),
-            transforms.Normalize(mean=[.5], std=[.5])])
     medmnistDataset = DataClass(split='test', transform=None, download=True, as_rgb=True)
     IMAGE_DIMENSION = 28
 
-    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, data_transform, medmnistDataset, IMAGE_DIMENSION
+    return DATASET_INFO, IMAGES, CLASSES, CLASS_DICT, DataClass, medmnistDataset, IMAGE_DIMENSION
 
 
 def getModel(modelName):
@@ -201,7 +186,7 @@ def getModel(modelName):
         net = vgg.Vgg()
         MODEL_PATH = '../models/VGGNet'
     elif modelName == "path":
-        net = medNets.ResNet18(in_channels=DATASET_INFO["n_channels"], num_classes=9)
+        net = medNets.ResNet18(in_channels=3, num_classes=9)
         MODEL_PATH = "../models/resnet18_28_1-path.pth"
     elif modelName == "breast":
         net = medNets.ResNet18(in_channels=3, num_classes=2)
