@@ -182,9 +182,6 @@ def getModel(modelName):
     elif modelName == 'vgg':
         net = vgg16()
         MODEL_PATH = '../models/cifar10-VGG16-20210315T233328.pth'
-    elif modelName == 'fer':
-        net = vgg.Vgg()
-        MODEL_PATH = '../models/VGGNet'
     elif modelName == "path":
         net = medNets.ResNet18(in_channels=3, num_classes=9)
         MODEL_PATH = "../models/resnet18_28_1-path.pth"
