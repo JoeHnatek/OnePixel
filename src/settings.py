@@ -129,7 +129,7 @@ def oct(images, RAND):
             )
 
     CLASS_DICT = {"choroidal_neovascularization":0,
-            "diabetic macular_edema":1,
+            "diabetic_macular_edema":1,
             "drusen":2,
             "normal":3}
     DataClass = getattr(medmnist, "OCTMNIST")
