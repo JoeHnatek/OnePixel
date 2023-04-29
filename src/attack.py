@@ -158,16 +158,16 @@ def getBestSolution(possiblePerturbations):
 
 def createBestTwoSol(index, possiblePerturbations):
 
-    x1, x2 = np.random.choice(possiblePerturbations, 2)
+    x1, x2, x3, x4 = np.random.choice(possiblePerturbations, 4)
 
     best = getBestSolution(possiblePerturbations)
 
     f = getF()
 
     if MODE == 'RGB':
-        return Perturbation.createBestTwoSol(index, x1, x2, best, f, IMAGE_DIMENSION)
+        return Perturbation.createBestTwoSol(x1, x2, x3, x4, best, f, IMAGE_DIMENSION)
     elif MODE == 'gray':
-        return PerturbationGrayScale.createBestTwoSol(index, x1, x2, best, f, IMAGE_DIMENSION)
+        return PerturbationGrayScale.createBestTwoSol(x1, x2, x3, x4, best, f, IMAGE_DIMENSION)
     else:
         exit() # crash
 

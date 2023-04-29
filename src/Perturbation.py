@@ -172,12 +172,12 @@ def createChildSol(x1, x2, x3, f, dim):
 
     return Perturbation(x, y, r, g, b, dim)
 
-def createBestTwoSol(index, x1, x2, best, f, dim):
+def createBestTwoSol(x1, x2, x3, x4, best, f, dim):
 
-    x = int(index.getX + f * (best.getX - index.getX) + f * (x1.getX - x2.getX)) % dim
-    y = int(index.getY + f * (best.getY - index.getY) + f * (x1.getY - x2.getY)) % dim
-    r = int(index.getR + f * (best.getR - index.getR) + f * (x1.getR - x2.getR)) % 256
-    g = int(index.getG + f * (best.getG - index.getG) + f * (x1.getG - x2.getG)) % 256
-    b = int(index.getB + f * (best.getB - index.getB) + f * (x1.getB - x2.getB)) % 256
+    x = int(best.getX + f * (x1.getX - x2.getX) + f * (x3.getX - x4.getX)) % dim
+    y = int(best.getY + f * (x1.getY - x2.getY) + f * (x3.getY - x4.getY)) % dim
+    r = int(best.getR + f * (x1.getR - x2.getR) + f * (x3.getR - x4.getR)) % 256
+    g = int(best.getG + f * (x1.getG - x2.getG) + f * (x3.getG - x4.getG)) % 256
+    b = int(best.getB + f * (x1.getB - x2.getB) + f * (x3.getB - x4.getB)) % 256
 
     return Perturbation(x, y, r, g, b, dim)
